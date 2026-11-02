@@ -4,9 +4,9 @@
  * Chapter 5 triggers the camp reveal sequence.
  */
 
-import { CHAPTERS } from '../data/chapters.js';
+import { CHAPTERS, getChapter } from '../data/chapters.js';
 import { JARGON, getJargonDefinition } from '../data/jargon.js';
-import { loadProgress, completeChapter, getLanguage } from '../services/progress.js';
+import { loadProgress, completeChapter, getLanguage, getSelectedPath } from '../services/progress.js';
 import { getRecommendedRepo } from '../services/github.js';
 import { CampScene } from '../engine/CampScene.js';
 
@@ -17,8 +17,9 @@ export function renderChapter(container, chapterId) {
     if (topBar) topBar.classList.remove('hidden');
     container.classList.remove('no-topbar');
 
+    const curPath = getSelectedPath();
     const id = parseInt(chapterId, 10);
-    const chapter = CHAPTERS.find(c => c.id === id);
+    const chapter = getChapter(curPath, id);
     if (!chapter) {
         container.innerHTML = `<div class="chapter-page"><h1>Chapter not found</h1></div>`;
         return;
@@ -57,7 +58,7 @@ export function renderChapter(container, chapterId) {
     `).join('');
 
     const isDone = status === 'done';
-    const nextChapter = CHAPTERS.find(c => c.id === id + 1);
+    const nextChapter = (id < 6) ? getChapter(curPath, id + 1) : null;
 
     container.innerHTML = `
         <section class="chapter-page" id="chapter-page">

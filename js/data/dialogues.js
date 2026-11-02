@@ -5,8 +5,10 @@
  */
 
 import { getJargonDefinition } from './jargon.js';
+import { JAVA_DIALOGUES } from './javaDialogues.js';
+import { DSA_DIALOGUES } from './dsaDialogues.js';
 
-export const DIALOGUE_SCRIPTS = {
+export const OSS_DIALOGUE_SCRIPTS = {
     borin: {
         chapterId: 1,
         xpReward: 50,
@@ -325,6 +327,12 @@ export function getChoiceLabel(choice, lang = 'en') {
     return choice.label;
 }
 
+export const DIALOGUE_SCRIPTS = {
+    ...OSS_DIALOGUE_SCRIPTS,
+    ...JAVA_DIALOGUES,
+    ...DSA_DIALOGUES
+};
+
 export function getLocalizedUI(lang = 'en') {
     const UI_TRANSLATIONS = {
         en: {
@@ -339,7 +347,19 @@ export function getLocalizedUI(lang = 'en') {
                 maren: 'the Cartographer',
                 fenwick: 'the Courier',
                 oren: 'the Watcher',
-                voss: 'the Gatekeeper'
+                voss: 'the Gatekeeper',
+                thorne: 'the Mill Operator',
+                vane: 'the Watch Officer',
+                clara: 'the Class Architect',
+                roland: 'the Guild Master',
+                ignis: 'the Pit Guardian',
+                priya: 'the Master Librarian',
+                vance: 'the Field Surveyor',
+                lin: 'the Chain Tender',
+                brick: 'the Storekeeper',
+                sylvia: 'the Canopy Guardian',
+                jax: 'the Wayfarer',
+                kaida: 'the Arena Master'
             }
         },
         hi: {
@@ -354,7 +374,19 @@ export function getLocalizedUI(lang = 'en') {
                 maren: 'द कार्टोग्राफ़र (नक्शानवीस)',
                 fenwick: 'द कूरियर (संदेशवाहक)',
                 oren: 'द वॉचर (ऋषि)',
-                voss: 'द गेटकीपर (द्वारपाल)'
+                voss: 'द गेटकीपर (द्वारपाल)',
+                thorne: 'द मिल ऑपरेटर',
+                vane: 'द वॉच ऑफिसर',
+                clara: 'द क्लास आर्किटेक्ट',
+                roland: 'द गिल्ड मास्टर',
+                ignis: 'द पिट गार्जियन',
+                priya: 'द मास्टर लाइब्रेरियन',
+                vance: 'द फील्ड सर्वेयर',
+                lin: 'द चेन टेंडर (नाविक)',
+                brick: 'द स्टोरकीपर (रसद अधिकारी)',
+                sylvia: 'द कैनोपी गार्जियन',
+                jax: 'द वेफ़ेयरर (मार्गदर्शक)',
+                kaida: 'द एरीना मास्टर (विजेता)'
             }
         },
         od: {
@@ -369,7 +401,19 @@ export function getLocalizedUI(lang = 'en') {
                 maren: 'ଦ କାର୍ଟୋଗ୍ରାଫର (ନକ୍ସାକାର)',
                 fenwick: 'ଦ କୁରିଅର (ଦୂତ)',
                 oren: 'ଦ ୱାଚର୍ (ଜ୍ଞାନୀ)',
-                voss: 'ଦ ଗେଟକିପର (ଦ୍ୱାରପାଳ)'
+                voss: 'ଦ ଗେଟକିପର (ଦ୍ୱାରପାଳ)',
+                thorne: 'ଦ ମିଲ୍ ଅପରେଟର୍',
+                vane: 'ଦ ୱାଚ୍ ଅଫିସର୍',
+                clara: 'ଦ କ୍ଲାସ୍ ଆର୍କିଟେକ୍ଟ',
+                roland: 'ଦ ଗିଲ୍ଡ ମାଷ୍ଟର୍',
+                ignis: 'ଦ ପିଟ୍ ଗାର୍ଡିଆନ୍',
+                priya: 'ଦ ମାଷ୍ଟର ଲାଇବ୍ରେରିଆନ୍',
+                vance: 'ଦ ଫିଲ୍ଡ ସର୍ଭେୟର',
+                lin: 'ଦ ଚେନ୍ ଟେଣ୍ଡର (ନାଉରିଆ)',
+                brick: 'ଦ ଷ୍ଟୋରକିପର',
+                sylvia: 'ଦ କାନୋପି ଗାର୍ଡିଆନ୍',
+                jax: 'ଦ ୱେଫେୟାରର୍ (ମାର୍ଗଦର୍ଶକ)',
+                kaida: 'ଦ ଆରେନା ମାଷ୍ଟର୍'
             }
         }
     };

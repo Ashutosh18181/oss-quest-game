@@ -5,6 +5,7 @@
 
 import { renderLanding, destroyLanding } from '../pages/Landing.js';
 import { renderOnboarding } from '../pages/Onboarding.js';
+import { renderChooseQuest } from '../pages/ChooseQuest.js';
 import { SceneManager } from '../engine/SceneManager.js';
 import { renderProfile } from '../pages/Profile.js';
 import { loadProgress } from '../services/progress.js';
@@ -40,6 +41,8 @@ export class Router {
             this._route('landing');
         } else if (hash === '/onboarding') {
             this._route('onboarding');
+        } else if (hash === '/choose-quest' || hash === '/paths') {
+            this._guardAuth(() => this._route('choose-quest'));
         } else if (hash === '/village' || hash === '/journey' || hash.startsWith('/chapter/')) {
             this._guardAuth(() => this._route('village'));
         } else if (hash === '/profile') {
@@ -77,6 +80,7 @@ export class Router {
 
             if (page === 'landing') renderLanding(this.container);
             else if (page === 'onboarding') renderOnboarding(this.container);
+            else if (page === 'choose-quest') renderChooseQuest(this.container);
             else if (page === 'profile') renderProfile(this.container);
         }
     }

@@ -11,10 +11,10 @@ import { QuestHUD } from './QuestHUD.js';
 import { Structure } from './Structure.js';
 import { Animal } from './Animal.js';
 
-import { VILLAGES, NPCS } from '../data/village.js';
-import { loadProgress, completeChapter, getLanguage } from '../services/progress.js';
+import { VILLAGES, NPCS, getVillageDef } from '../data/village.js';
+import { loadProgress, completeChapter, getLanguage, getSelectedPath } from '../services/progress.js';
 import { getRecommendedRepo } from '../services/github.js';
-import { CHAPTERS } from '../data/chapters.js';
+import { getChapter } from '../data/chapters.js';
 import { TerminalMinigame } from './TerminalMinigame.js';
 import { AudioSys } from './AudioManager.js';
 import { TouchControls } from './TouchControls.js';
@@ -23,7 +23,8 @@ export class VillageScene {
     constructor(sceneManager, villageId) {
         this.sceneManager = sceneManager;
         this.villageId = villageId;
-        this.villageDef = VILLAGES[villageId];
+        this.selectedPath = getSelectedPath();
+        this.villageDef = getVillageDef(this.selectedPath, villageId);
         
         this.container = document.getElementById('village-container');
         this.canvas = document.getElementById('village-canvas');
@@ -398,7 +399,7 @@ export class VillageScene {
 
     _updateHUD() {
         const lang = getLanguage();
-        const activeChapter = CHAPTERS.find(c => c.id === this.villageId);
+        const activeChapter = getChapter(this.selectedPath, this.villageId);
         if (activeChapter && this.progress.chapters[this.villageId] === 'active') {
             let chLabel = `Chapter ${activeChapter.id}`;
             let chStatus = "Quest Available";

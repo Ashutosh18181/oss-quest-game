@@ -32,6 +32,11 @@
             </a>
         </div>
         <div class="top-bar-section top-bar-center">
+            <a href="#/choose-quest" class="stat-pill" id="quest-pill" title="Switch Quest Path" style="text-decoration: none; cursor: pointer;">
+                <span class="stat-icon" id="quest-pill-icon">⚔️</span>
+                <span class="stat-value" id="quest-pill-title">OSS Quest</span>
+                <span class="stat-label">▾</span>
+            </a>
             <div class="stat-pill" id="xp-pill">
                 <span class="stat-icon">⚡</span>
                 <span class="stat-value" id="xp-count">0</span>
@@ -73,7 +78,7 @@
     <div id="app-ui-layer" class="app-ui-layer" style="display: none;">
         <!-- Quest HUD (Top Right) -->
         <div class="quest-hud">
-            <div class="quest-hud-portrait">⚔️</div>
+            <div class="quest-hud-portrait" id="quest-hud-icon">⚔️</div>
             <div class="quest-hud-info">
                 <div id="quest-hud-title" class="quest-hud-title">Chapter 1: Welcome</div>
                 <div id="quest-hud-progress" class="quest-hud-progress">Explore the village</div>
@@ -83,6 +88,7 @@
                     </div>
                 </div>
             </div>
+            <a href="#/choose-quest" class="hud-path-btn" title="Switch Quest" style="text-decoration:none; font-size:15px; padding:4px 7px; border-radius:4px; border:1px solid var(--c-border); background:var(--c-bg); cursor:pointer;">🗺️</a>
             <button id="hud-audio-toggle" class="hud-audio-btn" aria-label="Toggle Audio" title="Mute/Unmute Music">🔊</button>
             <select id="hud-lang-toggle" class="hud-lang-toggle" aria-label="Language">
                 <option value="en">EN</option>

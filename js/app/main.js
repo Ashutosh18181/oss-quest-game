@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         cat_sprite: 'assets/cat_sprite.png',
         campfire: 'assets/campfire.png',
         overworld: 'assets/overworld.png',
+        overworld_java: 'assets/overworld_java.jpg',
+        overworld_dsa: 'assets/overworld_dsa.jpg',
         bg_forge: 'assets/bg_forge.png',
         bg_copyworks: 'assets/bg_copyworks.png',
         bg_reading_grove: 'assets/bg_reading_grove.png',

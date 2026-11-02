@@ -1,10 +1,11 @@
 /**
- * OSS Quest — Overworld Scene (Image-Based)
- * Displays the static overworld map with clickable village nodes.
+ * OSS Quest — Overworld Scene (Multi-Path Edition)
+ * Displays the world map for the active quest path (Open Source, Java, or DSA).
+ * Player movement is unrestricted — walk anywhere on the map.
  */
 
-import { OVERWORLD } from '../data/village.js';
-import { loadProgress, getLanguage } from '../services/progress.js';
+import { getQuestPath } from '../data/quests.js';
+import { loadProgress, getLanguage, getSelectedPath } from '../services/progress.js';
 import { Assets } from './AssetLoader.js';
 import { TouchControls } from './TouchControls.js';
 
@@ -18,8 +19,13 @@ export class OverworldScene {
         this._running = false;
         this._onClick = this._handleClick.bind(this);
         this.progress = loadProgress();
+
+        // Load active quest path
+        this.selectedPath = getSelectedPath();
+        this.quest = getQuestPath(this.selectedPath);
+        this.nodes = this.quest.nodes || [];
+
         this.playerPos = { x: 0, y: 0 };
-        
         this.hoverNode = null;
         this._onMouseMove = this._handleMouseMove.bind(this);
 
@@ -27,22 +33,47 @@ export class OverworldScene {
         this._keydownHandler = this._handleKeydown.bind(this);
         this._keyupHandler = this._handleKeyup.bind(this);
         
-        this.speed = 150; // pixels per second
+        this.speed = 170; // pixels per second
         this.facing = 'down';
         this.touchControls = null;
 
         // Auto-travel feature: press 1-6 or click node to travel automatically
         this.targetNode = null;
         this.isAutoTravelling = false;
-        this.autoTravelSpeed = 320; // brisk, smooth travel speed
+        this.autoTravelSpeed = 340; // brisk, smooth travel speed
 
         this._langListener = () => this._updateHUD();
+        this._pathListener = (e) => {
+            this.selectedPath = e.detail?.path || getSelectedPath();
+            this.quest = getQuestPath(this.selectedPath);
+            this.nodes = this.quest.nodes || [];
+            this._resetPlayerToSpawn();
+            this._updateHUD();
+        };
+    }
+
+    _resetPlayerToSpawn() {
+        let maxUnlocked = 0;
+        const curChapters = this.progress.paths?.[this.selectedPath]?.chapters || this.progress.chapters || {};
+        for (let i = 1; i <= 6; i++) {
+            if (curChapters[i] === 'done') maxUnlocked = i;
+            else if (curChapters[i] === 'active') {
+                if (maxUnlocked < i - 1) maxUnlocked = i - 1; 
+                break;
+            }
+        }
+        
+        const startNodeId = maxUnlocked > 0 ? maxUnlocked : 1;
+        const startNode = this.nodes.find(n => n.id === startNodeId) || this.nodes[0];
+        
+        this.playerPos.x = startNode.x;
+        this.playerPos.y = startNode.y;
     }
 
     startAutoTravel(node) {
         if (!node || !this._isUnlocked(node.id)) return;
         const dist = Math.sqrt((node.x - this.playerPos.x)**2 + (node.y - this.playerPos.y)**2);
-        if (dist <= 14) {
+        if (dist <= 16) {
             this._running = false;
             this.sceneManager.loadScene('village', { villageId: node.id });
             return;
@@ -76,27 +107,13 @@ export class OverworldScene {
         window.addEventListener('keydown', this._keydownHandler);
         window.addEventListener('keyup', this._keyupHandler);
         window.addEventListener('language-changed', this._langListener);
+        window.addEventListener('path-changed', this._pathListener);
 
         // Mobile / Touch controls
         this.touchControls = new TouchControls();
         this.touchControls.show();
         
-        // Find highest unlocked chapter to place player marker
-        let maxUnlocked = 0;
-        for (let i = 1; i <= 6; i++) {
-            if (this.progress.chapters[i] === 'done') maxUnlocked = i;
-            else if (this.progress.chapters[i] === 'active') {
-                if (maxUnlocked < i - 1) maxUnlocked = i - 1; 
-                break;
-            }
-        }
-        
-        const startNodeId = maxUnlocked > 0 ? maxUnlocked : 1;
-        const startNode = OVERWORLD.nodes.find(n => n.id === startNodeId) || OVERWORLD.nodes[0];
-        
-        this.playerPos.x = startNode.x;
-        this.playerPos.y = startNode.y;
-
+        this._resetPlayerToSpawn();
         this._updateHUD();
 
         this._running = true;
@@ -113,10 +130,11 @@ export class OverworldScene {
         
         let doneCount = 0;
         let activeChapterId = 1;
+        const curChapters = this.progress.paths?.[this.selectedPath]?.chapters || this.progress.chapters || {};
         for (let i = 1; i <= 6; i++) {
-            if (this.progress?.chapters?.[i] === 'done') {
+            if (curChapters[i] === 'done') {
                 doneCount++;
-            } else if (this.progress?.chapters?.[i] === 'active') {
+            } else if (curChapters[i] === 'active') {
                 if (activeChapterId === 1) activeChapterId = i;
             }
         }
@@ -124,16 +142,20 @@ export class OverworldScene {
         const pct = Math.round((doneCount / 6) * 100);
         if (fillEl) fillEl.style.width = `${pct}%`;
 
+        let questName = this.quest.title;
+        if (lang === 'hi' && this.quest.title_hi) questName = this.quest.title_hi;
+        else if (lang === 'od' && this.quest.title_od) questName = this.quest.title_od;
+
         if (titleEl && progEl) {
             if (lang === 'hi') {
-                titleEl.textContent = `अध्याय ${activeChapterId}: विश्व मानचित्र`;
-                progEl.textContent = `${doneCount}/6 गाँव पूरे · आगे बढ़ें`;
+                titleEl.textContent = `${this.quest.icon} ${questName} · अध्याय ${activeChapterId}`;
+                progEl.textContent = `${doneCount}/6 गाँव पूरे`;
             } else if (lang === 'od') {
-                titleEl.textContent = `ଅଧ୍ୟାୟ ${activeChapterId}: ବିଶ୍ୱ ମାନଚିତ୍ର`;
-                progEl.textContent = `${doneCount}/6 ଗାଁ ସମ୍ପୂର୍ଣ୍ଣ · ଆଗକୁ ଚାଲନ୍ତୁ`;
+                titleEl.textContent = `${this.quest.icon} ${questName} · ଅଧ୍ୟାୟ ${activeChapterId}`;
+                progEl.textContent = `${doneCount}/6 ଗାଁ ସମ୍ପୂର୍ଣ୍ଣ`;
             } else {
-                titleEl.textContent = `Chapter ${activeChapterId}: World Map`;
-                progEl.textContent = `${doneCount}/6 villages complete · Explore`;
+                titleEl.textContent = `${this.quest.icon} ${questName} · Ch ${activeChapterId}`;
+                progEl.textContent = `${doneCount}/6 villages complete`;
             }
         }
 
@@ -172,12 +194,12 @@ export class OverworldScene {
     }
 
     _isUnlocked(nodeId) {
-        return true; // DEMO HACK: all villages unlocked
+        return true; // All unlocked for exploration
     }
 
     _getScaleAndOffset() {
-        // Fit image into canvas maintaining aspect ratio
-        const img = Assets.getImage('overworld');
+        // Fit current map image into canvas maintaining aspect ratio
+        const img = Assets.getImage(this.quest.mapImage) || Assets.getImage('overworld');
         if (!img) return { scale: 1, ox: 0, oy: 0 };
         
         const scale = Math.min(window.innerWidth / img.width, window.innerHeight / img.height);
@@ -188,7 +210,6 @@ export class OverworldScene {
     }
 
     _handleMouseMove(e) {
-        // Kept for backward compatibility, though not used for movement anymore
         const rect = this.canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
@@ -198,9 +219,9 @@ export class OverworldScene {
         const imgY = (mouseY - oy) / scale;
         
         this.hoverNode = null;
-        for (const node of OVERWORLD.nodes) {
+        for (const node of this.nodes) {
             const dist = Math.sqrt((imgX - node.x)**2 + (imgY - node.y)**2);
-            if (dist < 40) {
+            if (dist < 45) {
                 this.hoverNode = node;
                 break;
             }
@@ -235,7 +256,7 @@ export class OverworldScene {
         const num = parseInt(e.key, 10);
         if (!isNaN(num) && num >= 1 && num <= 6) {
             e.preventDefault();
-            const target = OVERWORLD.nodes.find(n => n.id === num);
+            const target = this.nodes.find(n => n.id === num);
             if (target && this._isUnlocked(target.id)) {
                 this.startAutoTravel(target);
                 return;
@@ -243,7 +264,7 @@ export class OverworldScene {
         }
         
         if (e.key.toLowerCase() === 'e') {
-            for (const node of OVERWORLD.nodes) {
+            for (const node of this.nodes) {
                 const dist = Math.sqrt((node.x - this.playerPos.x)**2 + (node.y - this.playerPos.y)**2);
                 if (dist < 50 && this._isUnlocked(node.id)) {
                     this._running = false;
@@ -296,7 +317,7 @@ export class OverworldScene {
             const tdy = this.targetNode.y - this.playerPos.y;
             const dist = Math.sqrt(tdx * tdx + tdy * tdy);
 
-            if (dist <= 14) {
+            if (dist <= 16) {
                 // Arrived at destination! Snap to node and enter
                 this.playerPos.x = this.targetNode.x;
                 this.playerPos.y = this.targetNode.y;
@@ -341,12 +362,15 @@ export class OverworldScene {
             else if (dy > 0) this.facing = 'down';
             else if (dy < 0) this.facing = 'up';
 
-            this.playerPos.x += dx * this.speed * (dt / 1000);
-            this.playerPos.y += dy * this.speed * (dt / 1000);
+            const stepX = dx * this.speed * (dt / 1000);
+            const stepY = dy * this.speed * (dt / 1000);
+
+            this.playerPos.x += stepX;
+            this.playerPos.y += stepY;
         }
         
         // Clamp to image bounds
-        const img = Assets.getImage('overworld');
+        const img = Assets.getImage(this.quest.mapImage) || Assets.getImage('overworld');
         if (img) {
             if (this.playerPos.x < 0) this.playerPos.x = 0;
             if (this.playerPos.x > img.width) this.playerPos.x = img.width;
@@ -357,7 +381,7 @@ export class OverworldScene {
 
     _draw() {
         const { scale, ox, oy } = this._getScaleAndOffset();
-        const img = Assets.getImage('overworld');
+        const img = Assets.getImage(this.quest.mapImage) || Assets.getImage('overworld');
         
         this.ctx.fillStyle = '#111';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -372,11 +396,12 @@ export class OverworldScene {
         
         let nearestNode = null;
         let nearestDist = Infinity;
+        const curChapters = this.progress.paths?.[this.selectedPath]?.chapters || this.progress.chapters || {};
 
         // Draw Nodes
-        for (const node of OVERWORLD.nodes) {
+        for (const node of this.nodes) {
             const unlocked = this._isUnlocked(node.id);
-            const isDone = this.progress.chapters[node.id] === 'done';
+            const isDone = curChapters[node.id] === 'done';
             
             const dist = Math.sqrt((node.x - this.playerPos.x)**2 + (node.y - this.playerPos.y)**2);
             if (dist < 50 && unlocked) {
@@ -384,13 +409,13 @@ export class OverworldScene {
                 nearestDist = dist;
             }
 
-            // Soft glow behind the badge so it pops against busy background art
+            // Soft glow behind the badge
             this.ctx.beginPath();
             this.ctx.arc(node.x, node.y, 22, 0, Math.PI * 2);
             this.ctx.fillStyle = unlocked ? 'rgba(232, 163, 61, 0.35)' : 'rgba(20, 20, 20, 0.35)';
             this.ctx.fill();
 
-            // Main badge — always a solid, visible fill (never near-invisible dark blob)
+            // Main badge
             this.ctx.beginPath();
             this.ctx.arc(node.x, node.y, 16, 0, Math.PI * 2);
             this.ctx.fillStyle = isDone ? '#5B9468' : (unlocked ? '#E8A33D' : '#6b7280');
@@ -402,7 +427,7 @@ export class OverworldScene {
             this.ctx.strokeStyle = '#21201C';
             this.ctx.stroke();
 
-            // Icon: checkmark / number / lock, so state reads at a glance
+            // Icon: checkmark / number / lock
             this.ctx.fillStyle = '#21201C';
             this.ctx.font = 'bold 14px "Space Mono", monospace';
             this.ctx.textAlign = 'center';
@@ -415,7 +440,7 @@ export class OverworldScene {
                 this.ctx.fillText('🔒', node.x, node.y + 1);
             }
 
-            // Always-visible label pill below the node (not hover-only)
+            // Always-visible label pill below the node
             const lang = getLanguage();
             let rawName = node.name;
             if (lang === 'hi' && node.name_hi) rawName = node.name_hi;
@@ -424,13 +449,13 @@ export class OverworldScene {
 
             this.ctx.font = 'bold 12px "Space Mono", monospace';
             const w = this.ctx.measureText(labelText).width + 18;
-            this.ctx.fillStyle = 'rgba(33, 32, 28, 0.85)';
+            this.ctx.fillStyle = 'rgba(33, 32, 28, 0.88)';
             this.ctx.fillRect(node.x - w / 2, node.y + 22, w, 22);
             this.ctx.fillStyle = unlocked ? '#FAF8F4' : '#c9c4b6';
             this.ctx.fillText(labelText, node.x, node.y + 33);
             this.ctx.textBaseline = 'alphabetic';
 
-            // Extra highlight ring on hover, on top of the always-visible badge
+            // Extra highlight ring on hover
             if ((this.hoverNode === node || nearestNode === node) && unlocked) {
                 this.ctx.beginPath();
                 this.ctx.arc(node.x, node.y, 20, 0, Math.PI * 2);
@@ -468,68 +493,73 @@ export class OverworldScene {
             this.ctx.restore();
         }
 
-        // Demo-Friendly Guide: Highlight The Forge (Node 1) if Chapter 1 is active/pending
-        const forgeNode = OVERWORLD.nodes.find(n => n.id === 1);
-        const isForgePending = this.progress?.chapters?.[1] !== 'done';
-        if (forgeNode && isForgePending) {
+        // Guide Banner for Node 1 if Chapter 1 is active/pending
+        const firstNode = this.nodes.find(n => n.id === 1) || this.nodes[0];
+        const isFirstPending = curChapters[1] !== 'done';
+        if (firstNode && isFirstPending) {
             const time = performance.now();
             const pulse = (time % 1600) / 1600;
 
             this.ctx.save();
-            // 1. Pulsing golden radar wave around The Forge
             this.ctx.beginPath();
-            this.ctx.arc(forgeNode.x, forgeNode.y, 16 + pulse * 32, 0, Math.PI * 2);
+            this.ctx.arc(firstNode.x, firstNode.y, 16 + pulse * 32, 0, Math.PI * 2);
             this.ctx.strokeStyle = `rgba(255, 215, 0, ${1 - pulse})`;
             this.ctx.lineWidth = 2.5;
             this.ctx.stroke();
 
-            // 2. Animated floating beacon arrow
+            // Animated floating beacon arrow
             const bounce = Math.sin(time / 180) * 6;
-            const arrowY = forgeNode.y - 42 + bounce;
+            const arrowY = firstNode.y - 42 + bounce;
             this.ctx.fillStyle = '#FFD700';
             this.ctx.beginPath();
-            this.ctx.moveTo(forgeNode.x - 10, arrowY - 14);
-            this.ctx.lineTo(forgeNode.x + 10, arrowY - 14);
-            this.ctx.lineTo(forgeNode.x, arrowY);
+            this.ctx.moveTo(firstNode.x - 10, arrowY - 14);
+            this.ctx.lineTo(firstNode.x + 10, arrowY - 14);
+            this.ctx.lineTo(firstNode.x, arrowY);
             this.ctx.closePath();
             this.ctx.fill();
             this.ctx.strokeStyle = '#21201C';
             this.ctx.lineWidth = 2;
             this.ctx.stroke();
 
-            // 3. Floating quest banner: "Start by talking to Borin the Blacksmith"
+            // Floating banner text
             const lang = getLanguage();
-            let guideText = "⚔️ Start by talking to Borin the Blacksmith at The Forge";
-            if (lang === 'hi') guideText = "⚔️ फ़ोर्ज में लोहार बोरिन से बात करके शुरुआत करें";
-            else if (lang === 'od') guideText = "⚔️ ଫୋର୍ଜରେ କମାର ବୋରିନ୍ ସହ କଥା ହୋଇ ଆରମ୍ଭ କରନ୍ତୁ";
+            let guideText = "⚔️ Start by talking to Borin at The Forge";
+            if (this.selectedPath === 'java') {
+                guideText = "☕ Start by talking to Master Thorne at The Syntax Mill";
+                if (lang === 'hi') guideText = "☕ सिंटैक्स मिल में मास्टर थोर्न से बात करके शुरुआत करें";
+                else if (lang === 'od') guideText = "☕ ସିଣ୍ଟାକ୍ସ ମିଲରେ ମାଷ୍ଟର ଥୋର୍ଣ୍ଣ ସହ କଥା ହୋଇ ଆରମ୍ଭ କରନ୍ତୁ";
+            } else if (this.selectedPath === 'dsa') {
+                guideText = "🌲 Start by talking to Farmer Vance at The Array Plains";
+                if (lang === 'hi') guideText = "🌲 ऐरे प्लेन्स में किसान वेंस से बात करके शुरुआत करें";
+                else if (lang === 'od') guideText = "🌲 ଆରେ ପ୍ଲେନ୍ସରେ କୃଷକ ଭେନ୍ସ ସହ କଥା ହୋଇ ଆରମ୍ଭ କରନ୍ତୁ";
+            } else {
+                if (lang === 'hi') guideText = "⚔️ फ़ोर्ज में लोहार बोरिन से बात करके शुरुआत करें";
+                else if (lang === 'od') guideText = "⚔️ ଫୋର୍ଜରେ କମାର ବୋରିନ୍ ସହ କଥା ହୋଇ ଆରମ୍ଭ କରନ୍ତୁ";
+            }
 
             this.ctx.font = 'bold 12px "Space Mono", monospace';
             const gw = this.ctx.measureText(guideText).width + 24;
-            const gx = forgeNode.x - gw / 2;
+            const gx = firstNode.x - gw / 2;
             const gy = arrowY - 42;
 
-            // Banner shadow
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
             if (this.ctx.roundRect) this.ctx.roundRect(gx + 2, gy + 3, gw, 28, 8);
             else this.ctx.rect(gx + 2, gy + 3, gw, 28);
             this.ctx.fill();
 
-            // Banner background
             this.ctx.fillStyle = '#21201C';
             if (this.ctx.roundRect) this.ctx.roundRect(gx, gy, gw, 28, 8);
             else this.ctx.rect(gx, gy, gw, 28);
             this.ctx.fill();
 
-            // Golden border
             this.ctx.strokeStyle = '#FFD700';
             this.ctx.lineWidth = 1.8;
             this.ctx.stroke();
 
-            // Banner text
             this.ctx.fillStyle = '#FFD700';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(guideText, forgeNode.x, gy + 14);
+            this.ctx.fillText(guideText, firstNode.x, gy + 14);
             this.ctx.restore();
         }
         
@@ -604,6 +634,9 @@ export class OverworldScene {
         }
         if (this._langListener) {
             window.removeEventListener('language-changed', this._langListener);
+        }
+        if (this._pathListener) {
+            window.removeEventListener('path-changed', this._pathListener);
         }
     }
 }

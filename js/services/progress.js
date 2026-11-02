@@ -1,12 +1,24 @@
 /**
- * OSS Quest — Progress Service
+ * OSS Quest — Progress Service (Multi-Path Edition)
  * Fully persists progress to localStorage (and syncs with backend when available).
- * Restores language preference, skill level, XP, and completed chapters on reload.
+ *
+ * Progress shape:
+ * {
+ *   language: "en",
+ *   experienceLevel: "learning",
+ *   selectedPath: "opensource" | "java" | "dsa",
+ *   paths: {
+ *     opensource: { completed: [], xp: 0, chapters: { 1: 'active', ... } },
+ *     java: { completed: [], xp: 0, chapters: { 1: 'active', ... } },
+ *     dsa: { completed: [], xp: 0, chapters: { 1: 'active', ... } }
+ *   }
+ * }
  */
 
 import { requireAuth } from './auth.js';
 
-const STORAGE_KEY = 'oss_quest_progress_v2';
+const STORAGE_KEY = 'oss_quest_progress_v3';
+const LEGACY_STORAGE_KEY = 'oss_quest_progress_v2';
 
 const BACKEND_BASE = (typeof window !== 'undefined' && window.location.port && window.location.port !== '3001' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
     ? `${window.location.protocol}//${window.location.hostname}:3001`
@@ -14,41 +26,129 @@ const BACKEND_BASE = (typeof window !== 'undefined' && window.location.port && w
 
 const BACKEND_URL = `${BACKEND_BASE}/api/progress`;
 
-const DEFAULT_PROGRESS = {
-    chapters: {
-        1: 'active',
-        2: 'active',
-        3: 'active',
-        4: 'active',
-        5: 'active',
-        6: 'active',
+const DEFAULT_CHAPTER_MAP = {
+    1: 'active',
+    2: 'active',
+    3: 'active',
+    4: 'active',
+    5: 'active',
+    6: 'active'
+};
+
+const DEFAULT_PATHS = {
+    opensource: {
+        completed: [],
+        xp: 0,
+        chapters: { ...DEFAULT_CHAPTER_MAP }
     },
+    java: {
+        completed: [],
+        xp: 0,
+        chapters: { ...DEFAULT_CHAPTER_MAP }
+    },
+    dsa: {
+        completed: [],
+        xp: 0,
+        chapters: { ...DEFAULT_CHAPTER_MAP }
+    }
+};
+
+const DEFAULT_PROGRESS = {
+    language: 'en',
+    experienceLevel: 'learning',
+    skillLevel: 'learning',
+    selectedPath: 'opensource',
+    paths: {
+        opensource: { completed: [], xp: 0, chapters: { ...DEFAULT_CHAPTER_MAP } },
+        java: { completed: [], xp: 0, chapters: { ...DEFAULT_CHAPTER_MAP } },
+        dsa: { completed: [], xp: 0, chapters: { ...DEFAULT_CHAPTER_MAP } }
+    },
+    // Top-level aliases for backwards compatibility with earlier components
+    chapters: { ...DEFAULT_CHAPTER_MAP },
     xp: 0,
     streak: 0,
     lastActiveDate: null,
-    language: 'en',
     codeLanguage: 'javascript',
-    skillLevel: 'beginner',
     onboardingComplete: false,
 };
 
-/** Load initial progress synchronously from localStorage to prevent flash of reset state */
+/** Normalize and ensure valid paths structure */
+function normalizeProgress(rawObj) {
+    const obj = { ...DEFAULT_PROGRESS, ...rawObj };
+    if (!obj.paths) obj.paths = {};
+
+    const availablePaths = ['opensource', 'java', 'dsa'];
+    for (const p of availablePaths) {
+        if (!obj.paths[p]) {
+            obj.paths[p] = {
+                completed: [],
+                xp: 0,
+                chapters: { ...DEFAULT_CHAPTER_MAP }
+            };
+        } else {
+            obj.paths[p] = {
+                completed: Array.isArray(obj.paths[p].completed) ? obj.paths[p].completed : [],
+                xp: typeof obj.paths[p].xp === 'number' ? obj.paths[p].xp : 0,
+                chapters: { ...DEFAULT_CHAPTER_MAP, ...(obj.paths[p].chapters || {}) }
+            };
+        }
+    }
+
+    if (!availablePaths.includes(obj.selectedPath)) {
+        obj.selectedPath = 'opensource';
+    }
+
+    // Populate completed array if chapters are done
+    const curPath = obj.paths[obj.selectedPath];
+    for (let i = 1; i <= 6; i++) {
+        if (curPath.chapters[i] === 'done' && !curPath.completed.includes(i)) {
+            curPath.completed.push(i);
+        }
+    }
+
+    // Sync root convenience properties to active path
+    obj.chapters = { ...curPath.chapters };
+    obj.xp = curPath.xp;
+
+    return obj;
+}
+
+/** Load initial progress synchronously from localStorage */
 function loadFromStorage() {
     if (typeof window === 'undefined') return { ...DEFAULT_PROGRESS };
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        let raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+            // Attempt migration from v2
+            raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+            if (raw) {
+                const legacy = JSON.parse(raw);
+                const migrated = normalizeProgress({
+                    ...legacy,
+                    selectedPath: 'opensource',
+                    paths: {
+                        opensource: {
+                            completed: Object.entries(legacy.chapters || {})
+                                .filter(([_, state]) => state === 'done')
+                                .map(([id]) => parseInt(id, 10)),
+                            xp: legacy.xp || 0,
+                            chapters: { ...DEFAULT_CHAPTER_MAP, ...(legacy.chapters || {}) }
+                        },
+                        java: { completed: [], xp: 0, chapters: { ...DEFAULT_CHAPTER_MAP } },
+                        dsa: { completed: [], xp: 0, chapters: { ...DEFAULT_CHAPTER_MAP } }
+                    }
+                });
+                persistToStorage(migrated);
+                return migrated;
+            }
+        }
         if (raw) {
-            const parsed = JSON.parse(raw);
-            return {
-                ...DEFAULT_PROGRESS,
-                ...parsed,
-                chapters: { ...DEFAULT_PROGRESS.chapters, ...(parsed.chapters || {}) }
-            };
+            return normalizeProgress(JSON.parse(raw));
         }
     } catch (e) {
         console.warn("Failed to read progress from localStorage:", e);
     }
-    return { ...DEFAULT_PROGRESS };
+    return normalizeProgress({});
 }
 
 /** Save progress state synchronously to localStorage */
@@ -65,7 +165,7 @@ let localCache = loadFromStorage();
 
 /** Micro-toast indicating progress was saved */
 export function showSaveIndicator(msg) {
-    if (typeof document === 'undefined') return;
+    if (typeof document === 'undefined' || !document.createElement) return;
     const lang = localCache.language || 'en';
     let defaultMsg = 'Progress saved ✓';
     if (lang === 'hi') defaultMsg = 'प्रगति सहेजी गई ✓';
@@ -92,6 +192,25 @@ export function updateTopBarUI() {
     const streakEl = document.getElementById('streak-count');
     if (xpEl) xpEl.textContent = localCache.xp;
     if (streakEl) streakEl.textContent = localCache.streak;
+
+    const questPillIcon = document.getElementById('quest-pill-icon');
+    const questPillTitle = document.getElementById('quest-pill-title');
+    const hudIcon = document.getElementById('quest-hud-icon');
+
+    const path = localCache.selectedPath || 'opensource';
+    let icon = '⚔️';
+    let name = 'OSS Quest';
+    if (path === 'java') {
+        icon = '☕';
+        name = 'Java Quest';
+    } else if (path === 'dsa') {
+        icon = '🌲';
+        name = 'DSA Quest';
+    }
+
+    if (questPillIcon) questPillIcon.textContent = icon;
+    if (questPillTitle) questPillTitle.textContent = name;
+    if (hudIcon) hudIcon.textContent = icon;
 }
 
 /** Initialize progress: combines localStorage cache and optionally merges backend updates */
@@ -115,11 +234,14 @@ export async function initProgress() {
         if (response.ok) {
             const data = await response.json();
             if (data && typeof data === 'object') {
-                localCache = {
+                localCache = normalizeProgress({
                     ...localCache,
                     ...data,
-                    chapters: { ...localCache.chapters, ...(data.chapters || {}) }
-                };
+                    paths: {
+                        ...localCache.paths,
+                        ...(data.paths || {})
+                    }
+                });
                 persistToStorage(localCache);
                 updateTopBarUI();
             }
@@ -138,16 +260,17 @@ export function loadProgress() {
 
 /** Save progress to localStorage (and asynchronously sync with backend) */
 export async function saveProgress(progress, showToast = true) {
-    localCache = {
+    localCache = normalizeProgress({
         ...localCache,
         ...progress,
-        chapters: {
-            ...localCache.chapters,
-            ...(progress.chapters || {})
+        paths: {
+            ...localCache.paths,
+            ...(progress.paths || {})
         }
-    };
+    });
     persistToStorage(localCache);
     updateTopBarUI();
+
     if (showToast) showSaveIndicator();
 
     const user = requireAuth();
@@ -171,9 +294,37 @@ export async function saveProgress(progress, showToast = true) {
     }
 }
 
-/** Get chapter status. */
-export function getChapterStatus(chapterId) {
-    return localCache.chapters[chapterId] || 'locked';
+/** Get current active quest path ('opensource' | 'java' | 'dsa') */
+export function getSelectedPath() {
+    return localCache.selectedPath || 'opensource';
+}
+
+/** Switch active quest path */
+export async function setSelectedPath(pathId) {
+    if (!['opensource', 'java', 'dsa'].includes(pathId)) return;
+    localCache.selectedPath = pathId;
+    localCache = normalizeProgress(localCache);
+    persistToStorage(localCache);
+    updateTopBarUI();
+
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('path-changed', { detail: { path: pathId } }));
+    }
+    await saveProgress({ selectedPath: pathId }, false);
+}
+
+/** Get status of a chapter within the active (or specified) quest path */
+export function getChapterStatus(chapterId, pathId = null) {
+    const p = pathId || localCache.selectedPath || 'opensource';
+    const pathData = localCache.paths[p];
+    if (!pathData) return 'locked';
+    return pathData.chapters[chapterId] || 'locked';
+}
+
+/** Get path-specific progress data */
+export function getPathProgress(pathId) {
+    const p = pathId || localCache.selectedPath || 'opensource';
+    return localCache.paths[p] || { completed: [], xp: 0, chapters: { ...DEFAULT_CHAPTER_MAP } };
 }
 
 /**
@@ -182,18 +333,26 @@ export function getChapterStatus(chapterId) {
  * @param {number} xpReward
  */
 export async function completeChapter(chapterId, xpReward = 0) {
-    localCache.chapters[chapterId] = 'done';
+    const curPath = localCache.selectedPath || 'opensource';
+    const pathData = localCache.paths[curPath];
+
+    pathData.chapters[chapterId] = 'done';
+    if (!pathData.completed.includes(chapterId)) {
+        pathData.completed.push(chapterId);
+    }
 
     // Unlock next chapter
     const nextId = chapterId + 1;
-    if (nextId <= 6 && localCache.chapters[nextId] === 'locked') {
-        localCache.chapters[nextId] = 'active';
+    if (nextId <= 6 && pathData.chapters[nextId] === 'locked') {
+        pathData.chapters[nextId] = 'active';
     }
 
-    localCache.xp += xpReward;
+    pathData.xp += xpReward;
+    localCache.xp = pathData.xp;
     localCache.streak = Math.max(localCache.streak, 1);
     localCache.lastActiveDate = new Date().toISOString();
 
+    localCache = normalizeProgress(localCache);
     persistToStorage(localCache);
     updateTopBarUI();
     showSaveIndicator(`+${xpReward} XP Earned · Progress saved ✓`);
@@ -216,18 +375,20 @@ export async function setLanguage(lang) {
 
 export async function setOnboarding(complete, profileData = {}) {
     localCache.onboardingComplete = complete;
-    localCache = { ...localCache, ...profileData };
+    localCache = normalizeProgress({ ...localCache, ...profileData });
     persistToStorage(localCache);
     if (typeof window !== 'undefined' && profileData.language) {
         window.dispatchEvent(new CustomEvent('language-changed', { detail: { language: profileData.language } }));
+    }
+    if (typeof window !== 'undefined' && profileData.selectedPath) {
+        window.dispatchEvent(new CustomEvent('path-changed', { detail: { path: profileData.selectedPath } }));
     }
     await saveProgress(localCache, false);
 }
 
 export async function resetProgress() {
-    localCache = { ...DEFAULT_PROGRESS };
+    localCache = normalizeProgress({ ...DEFAULT_PROGRESS });
     persistToStorage(localCache);
     updateTopBarUI();
     await saveProgress(localCache, true);
 }
-

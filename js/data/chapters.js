@@ -3,6 +3,11 @@
  * 6 chapters taking a learner from zero to first PR.
  */
 
+import { JAVA_CHAPTERS } from './javaChapters.js';
+import { DSA_CHAPTERS } from './dsaChapters.js';
+
+export { JAVA_CHAPTERS, DSA_CHAPTERS };
+
 export const CHAPTERS = [
     {
         id: 1,
@@ -182,3 +187,22 @@ export const CHAPTERS = [
         ]
     }
 ];
+
+/**
+ * Get chapter list for a given quest path
+ * @param {string} pathId - 'opensource' | 'java' | 'dsa'
+ */
+export function getChapters(pathId = 'opensource') {
+    if (pathId === 'java') return JAVA_CHAPTERS;
+    if (pathId === 'dsa') return DSA_CHAPTERS;
+    return CHAPTERS;
+}
+
+/**
+ * Get a specific chapter by id within a quest path
+ */
+export function getChapter(pathId, chapterId) {
+    const list = getChapters(pathId);
+    return list.find(c => c.id === parseInt(chapterId, 10)) || list[0];
+}
+

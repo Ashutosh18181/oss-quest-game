@@ -1,5 +1,6 @@
 {
   "name": "ossquest",
   "version": "1.0.0",
+  "type": "module",
   "description": "OSS Quest — Open Source Contribution RPG"
 }
